@@ -1,0 +1,180 @@
+﻿@page "/"
+@using GameOfLifeBlazor.Models
+
+<PageTitle>Home</PageTitle>
+
+<div class="mb-1">
+    <label>Display Borders?</label>
+    <input type="checkbox" @bind-value="_displayBorders"/>
+</div>
+<div class="mb-3">
+    <label>Cell Size</label>
+    <input min="0" type="number" @bind-value="CellSize"/> 
+</div>
+
+<div class="mb-1">
+    <label>Grid Width</label>
+    <input min="0" max="1000" type="number" @bind-value="GridWidth"/> 
+</div>
+<div class="mb-3">
+    <label>Grid Height</label>
+    <input min="0" max="1000" type="number" @bind-value="GridHeight"/> 
+</div>
+
+<div class="mb-1">
+    <button class="btn btn-primary" @onclick="InitRandomBoard">Set Random Board</button>
+    <button class="btn btn-primary" @onclick="InitEmptyBoard">Set Empty Board</button>
+</div>
+<div class="mb-3">
+    <label>Delay</label>
+    <input min="0" type="number" @bind-value="Delay"/> 
+    <label>ms</label>
+    <button class="btn @(!_autorun ? "btn-success" : "btn-danger")" @onclick="ToggleAutoRun">@(!_autorun ? "Start" : "Stop") AutoRun</button>
+    <button class="btn btn-primary" @onclick="Step">Step Once</button>
+    <button class="btn btn-primary" @onclick="RevertToPreviousState">Revert To Previous State</button>
+</div>
+<div>
+    <button class="btn btn-primary" @onclick="ExportBoard">Export</button>
+    <button class="btn btn-primary" @onclick="ImportBoard">Import</button>
+</div>
+
+<textarea @bind="_boardData"></textarea>
+@if (_boardParseError)
+{
+    <span class="text-danger h6"><b>Failed to parse board data</b></span>
+}
+
+
+<table style="margin-bottom: 32px">
+    @for (var y = 0; y < _board.Cells.GetLength(1); y++)
+    {
+        <tr>
+            @for (var x = 0; x < _board.Cells.GetLength(0); x++)
+            {
+                var cell = _board.Cells[x, y];
+
+                var size = (_displayBorders ? CellSize - 1 : CellSize).ToString();
+                    
+                <td @onclick="cell.Toggle" @oncontextmenu="cell.ToggleWall" @oncontextmenu:preventDefault="true"
+                    class="@(cell.CurrentState switch {
+                               CellState.On => "cell-on",
+                               CellState.Off => "cell-off",
+                               CellState.Wall => "cell-wall",
+                               _ => throw new ArgumentOutOfRangeException()})"
+                    style="padding-left: @(size)px; padding-top: @(size)px; @(_displayBorders ? "border: 1px solid #a52834" : "")"
+                />
+            }
+        </tr>
+    }
+</table>
+
+@code {
+    private Board _board = null!;
+    private Board? _previousState;
+    
+    private bool _displayBorders;
+    private int _cellSize = 30;
+
+    private int CellSize
+    {
+        get => _cellSize;
+        set => _cellSize = value < 1 ? 1 : value;
+    }
+    
+    private int _gridWidth = 20;
+    private int GridWidth
+    {
+        get => _gridWidth;
+        set => _gridWidth = value < 0 ? 0 : value;
+    }
+    private int _gridHeight = 20;
+
+    private int GridHeight
+    {
+        get => _gridHeight;
+        set => _gridHeight = value < 0 ? 0 : value;
+    }
+    
+    private bool _autorun;
+    private int _delay = 100;
+
+    private int Delay
+    {
+        get => _delay;
+        set => _delay = value < 10 ? 10 : value;
+    }
+    
+    private string _boardData = "";
+    private bool _boardParseError;
+
+    protected override void OnInitialized()
+    {
+        InitRandomBoard();
+    }
+
+    private void InitRandomBoard()
+    {
+        var r = new Random();
+        _board = new Board(GridWidth, GridHeight, (_, _) => r.Next(0, 2) == 1 ? CellState.On : CellState.Off);
+    }
+
+    private void InitEmptyBoard()
+    {
+        _board = new Board(GridWidth, GridHeight, (_, _) => CellState.Off);
+    }
+    
+    private async Task ToggleAutoRun()
+    {
+        if (_autorun)
+        {
+            _autorun = false;
+            return;
+        }
+        
+        _previousState = _board.Clone();
+        
+        _autorun = true;
+        
+        while (_autorun)
+        {
+            await Task.Run(_board.Process);
+            StateHasChanged();
+            await Task.Delay(Delay);
+        }
+    }
+
+    private async Task Step()
+    {
+        _previousState = _board.Clone();
+
+        await Task.Run(_board.Process);
+    }
+
+    private void RevertToPreviousState()
+    {
+        if (_previousState is null) return;
+
+        var temp = _board.Clone();
+        _board = _previousState;
+        _previousState = temp;
+    }
+
+    private void ExportBoard()
+    {
+        _boardData = _board.Serialize();
+    }
+
+    private void ImportBoard()
+    {
+        _boardParseError = false;
+
+        if (Board.TryDeserialize(_boardData, out var result) && result is not null)
+        {
+            _board = result;
+        }
+        else
+        {
+            _boardParseError = true;
+        }
+    }
+}
