@@ -5,8 +5,21 @@ namespace GameOfLifeBlazor.Models;
 
 public class Board {
     public Cell[,] Cells { get; }
+    private HashSet<Cell>? _activeCells;
+    private HashSet<Cell> _nextActiveCells = new();
 
     public delegate CellState CellInitializer(int cellX, int cellY);
+
+    private void HandleCellChanged(Cell c)
+    {
+        if (c.CurrentState is not CellState.On) return;
+        _nextActiveCells.Add(c);
+
+        foreach (var n in c.Neighbours)
+        {
+            _nextActiveCells.Add(n);
+        }
+    }
 
     public Board(int width, int height, CellInitializer cellInitializer)
     {
@@ -16,19 +29,17 @@ public class Board {
         {
             for (var h = 0; h < Cells.GetLength(1); h++)
             {
-                Cells[w, h] = new Cell(cellInitializer(w, h));
+                var cell = new Cell(cellInitializer(w, h));
+                Cells[w, h] = cell;
+                cell.StateChanged += HandleCellChanged; 
             }
         }
         
-        RegisterCellNeighbours();
-    }
-
-    private void RegisterCellNeighbours()
-    {
         for (var w = 0; w < Cells.GetLength(0); w++)
         {
             for (var h = 0; h < Cells.GetLength(1); h++)
             {
+                var cell = Cells[w, h];
                 var directions = new[] {(1,1),(1,0),(1,-1),(0,1),(0,-1),(-1,1),(-1,0),(-1,-1)};
                 foreach (var (x, y) in directions)
                 {
@@ -42,20 +53,37 @@ public class Board {
                     
                     Cells[w,h].Neighbours.Add(Cells[checkX,checkY]);
                 }
+
+                if (cell.CurrentState is not CellState.On) continue;
+                
+                _nextActiveCells.Add(cell);
+                foreach (var n in cell.Neighbours)
+                {
+                    _nextActiveCells.Add(cell);
+                }
             }
         }
     }
 
     public void Process()
     {
-        foreach (var cell in Cells)
+        _activeCells = _nextActiveCells;
+        _nextActiveCells = new HashSet<Cell>();
+        
+        foreach (var cell in _activeCells)
         {
             cell.GetNextState();
         }
 
-        foreach (var cell in Cells)
+        foreach (var cell in _activeCells)
         {
             cell.MoveToNextState();
+            if (cell.CurrentState is not CellState.On) continue;
+            _nextActiveCells.Add(cell);
+            foreach (var n in cell.Neighbours)
+            {
+                _nextActiveCells.Add(n);
+            }
         }
     }
 

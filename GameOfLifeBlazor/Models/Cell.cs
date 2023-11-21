@@ -13,6 +13,10 @@ public class Cell(CellState initialState)
     public CellState CurrentState { get; set; } = initialState;
     private CellState _nextState;
 
+    public delegate void CellChangedEventHandler(Cell e);
+
+    public event CellChangedEventHandler? StateChanged;
+    
     public void Toggle()
     {
         CurrentState = CurrentState switch
@@ -21,6 +25,8 @@ public class Cell(CellState initialState)
             CellState.Off => CellState.On,
             _ => CurrentState
         };
+
+        StateChanged?.Invoke(this);
     }
     
     public void GetNextState()
@@ -48,10 +54,12 @@ public class Cell(CellState initialState)
     public void MoveToNextState()
     {
         CurrentState = _nextState;
+        StateChanged?.Invoke(this);
     }
 
     public void ToggleWall()
     {
         CurrentState = CurrentState is CellState.Wall ? CellState.Off : CellState.Wall;
+        StateChanged?.Invoke(this);
     }
 }
